@@ -7,17 +7,14 @@ export async function onRequestPost(context) {
             return new Response(JSON.stringify({ error: "Invalid word list provided." }), { status: 400 });
         }
 
-        // Set direction: 'enit' (English to Italian) or 'iten' (Italian to English)
         const dict = direction === 'iten' ? 'iten' : 'enit';
 
-        // Fetch all translations concurrently for maximum speed
         const results = await Promise.all(words.map(async (word) => {
             if (!word.trim()) return null;
             
             const url = `https://www.wordreference.com/${dict}/${encodeURIComponent(word.trim())}`;
 
             try {
-                // WordReference blocks obvious bots; a standard User-Agent is required
                 const wrResponse = await fetch(url, {
                     headers: {
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -28,25 +25,30 @@ export async function onRequestPost(context) {
 
                 const html = await wrResponse.text();
 
-                // Regex to find the first translation target cell (<td class='ToWrd'>)
-                // This is much faster than parsing the entire HTML DOM for an edge function
-                const match = html.match(/<td class='ToWrd'[^>]*>([\s\S]*?)<\/td>/);
+                // Find all target cells instead of just the first one
+                const regex = /<td class='ToWrd'[^>]*>([\s\S]*?)<\/td>/g;
+                const matches = [...html.matchAll(regex)];
 
-                if (match) {
-                    // Strip inner HTML tags (like <em> or <a>) and clean up whitespace
-                    let translation = match[1].replace(/<[^>]*>?/gm, '').trim();
-                    translation = translation.replace(/\s+/g, ' '); 
-                    return { word, translation };
-                } else {
-                    return { word, translation: "No direct translation found" };
+                let translation = "No direct translation found";
+
+                for (const match of matches) {
+                    let cleanText = match[1].replace(/<[^>]*>?/gm, '').trim();
+                    cleanText = cleanText.replace(/\s+/g, ' '); 
+
+                    // Skip the column headers to grab the first actual definition
+                    if (cleanText && !['Italiano', 'English', 'Italian'].includes(cleanText)) {
+                        translation = cleanText;
+                        break; 
+                    }
                 }
+
+                return { word, translation };
 
             } catch (e) {
                 return { word, translation: "Error" };
             }
         }));
 
-        // Filter out any blank lines that were mapped to null
         const cleanResults = results.filter(r => r !== null);
 
         return new Response(JSON.stringify({ results: cleanResults }), {
