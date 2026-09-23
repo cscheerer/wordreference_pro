@@ -7,37 +7,48 @@ export async function onRequestPost(context) {
             return new Response(JSON.stringify({ error: "Invalid word list provided." }), { status: 400 });
         }
 
-        // Convert the frontend direction string into MyMemory's required pipe-separated format
         const langpair = direction === 'iten' ? 'it|en' : 'en|it';
+        
+        // UPDATE THIS: MyMemory increases your rate limit if you provide an email
+        const email = encodeURIComponent("your.email@example.com");
 
-        const results = await Promise.all(words.map(async (word) => {
-            if (!word.trim()) return null;
+        const results = [];
+        const chunkSize = 3; // Process 3 words at a time to prevent 429 burst limits
+
+        for (let i = 0; i < words.length; i += chunkSize) {
+            const chunk = words.slice(i, i + chunkSize);
             
-            // Build the MyMemory API GET request
-            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(word.trim())}&langpair=${langpair}`;
-
-            try {
-                const apiResponse = await fetch(url);
+            const chunkPromises = chunk.map(async (word) => {
+                if (!word.trim()) return null;
                 
-                if (!apiResponse.ok) return { word, translation: `API error: ${apiResponse.status}` };
+                const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(word.trim())}&langpair=${langpair}&de=${email}`;
 
-                const data = await apiResponse.json();
-                
-                // Extract the translated text directly from the API response
-                if (data?.responseData?.translatedText) {
-                    return { word, translation: data.responseData.translatedText };
-                } else {
-                    return { word, translation: "No translation found" };
+                try {
+                    const apiResponse = await fetch(url);
+                    if (!apiResponse.ok) return { word, translation: `API error: ${apiResponse.status}` };
+
+                    const data = await apiResponse.json();
+                    
+                    if (data?.responseData?.translatedText) {
+                        return { word, translation: data.responseData.translatedText };
+                    } else {
+                        return { word, translation: "No translation found" };
+                    }
+                } catch (e) {
+                    return { word, translation: "Request failed" };
                 }
+            });
 
-            } catch (e) {
-                return { word, translation: "Request failed" };
+            const chunkResults = await Promise.all(chunkPromises);
+            results.push(...chunkResults.filter(r => r !== null));
+            
+            // Add a 300ms pause between chunks to let the API breathe
+            if (i + chunkSize < words.length) {
+                await new Promise(resolve => setTimeout(resolve, 300));
             }
-        }));
+        }
 
-        const cleanResults = results.filter(r => r !== null);
-
-        return new Response(JSON.stringify({ results: cleanResults }), {
+        return new Response(JSON.stringify({ results }), {
             headers: { "Content-Type": "application/json" }
         });
 
