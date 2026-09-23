@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast WR Scraper</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>WordReference Bulk Translator</h1>
+        
+        <div class="controls">
+            <select id="direction">
+                <option value="enit">English ➔ Italian</option>
+                <option value="iten">Italian ➔ English</option>
+            </select>
+            <button id="translateBtn">Translate List</button>
+        </div>
+
+        <textarea id="wordList" placeholder="Paste your list of words here...&#10;One word per line."></textarea>
+
+        <div id="loading" class="hidden">Scraping WordReference...</div>
+
+        <table id="resultsTable" class="hidden">
+            <thead>
+                <tr>
+                    <th>Original Word</th>
+                    <th>Primary Translation</th>
+                </tr>
+            </thead>
+            <tbody id="resultsBody">
+                <!-- Results injected via JS -->
+            </tbody>
+        </table>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
